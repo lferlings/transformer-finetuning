@@ -1,3 +1,4 @@
+import torch
 from unsloth import FastLanguageModel
 from datasets import Dataset
 from transformers import (
@@ -5,21 +6,37 @@ from transformers import (
     DataCollatorForLanguageModeling,
     Trainer,
 )
+from peft import LoraConfig, get_peft_model
 from unsloth import is_bfloat16_supported
 import multiprocessing
 
 # Parameters
 max_seq_length = 512
-dtype = None
-load_in_4bit = True
+dtype = None  # Keep as None or set to torch.float16 / torch.bfloat16
+load_in_4bit = True  # We will use 4-bit quantization
 
 # Load model and tokenizer
+model_name = "unsloth/Llama-3.2-3B-Instruct"
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="unsloth/Llama-3.2-3B-Instruct",
+    model_name=model_name,
     max_seq_length=max_seq_length,
     dtype=dtype,
     load_in_4bit=load_in_4bit,
 )
+
+# Prepare LoRA configuration
+lora_config = LoraConfig(
+    r=16,  # Rank of the LoRA matrices
+    lora_alpha=32,
+    target_modules=["q_proj", "v_proj"],  # Modules to apply LoRA
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+
+# Attach LoRA adapters to the model
+model = get_peft_model(model, lora_config)
 
 # Preprocess text
 def preprocess_text(text):
@@ -60,7 +77,7 @@ dataset = dataset.map(
 # Data collator
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
-    mlm=False,
+    mlm=False,  # We are doing causal language modeling
 )
 
 # Training arguments
@@ -72,7 +89,7 @@ training_args = TrainingArguments(
     fp16=not is_bfloat16_supported(),
     bf16=is_bfloat16_supported(),
     logging_steps=50,
-    optim="adamw_torch",
+    optim="paged_adamw_8bit",  # Use an optimizer compatible with 8-bit models
     weight_decay=0.01,
     lr_scheduler_type="linear",
     seed=42,
@@ -84,7 +101,6 @@ training_args = TrainingArguments(
 # Trainer
 trainer = Trainer(
     model=model,
-    tokenizer=tokenizer,
     train_dataset=dataset,
     data_collator=data_collator,
     args=training_args,
@@ -93,6 +109,6 @@ trainer = Trainer(
 # Train the model
 trainer.train()
 
-# Save the model
-model.save_pretrained("shakespeare_model")
-tokenizer.save_pretrained("shakespeare_model")
+# Save the LoRA adapters (not the full model)
+model.save_pretrained("shakespeare_model_lora")
+tokenizer.save_pretrained("shakespeare_model_lora")
