@@ -1,3 +1,4 @@
+import os
 import torch
 from unsloth import FastLanguageModel
 from datasets import Dataset
@@ -7,8 +8,10 @@ from transformers import (
     Trainer,
 )
 from peft import LoraConfig, get_peft_model
-from unsloth import is_bfloat16_supported
 import multiprocessing
+
+# Disable xFormers
+os.environ["USE_XFORMERS"] = "False"
 
 # Parameters
 max_seq_length = 512
