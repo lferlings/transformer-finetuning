@@ -12,7 +12,7 @@ import multiprocessing
 
 # Parameters
 max_seq_length = 512
-dtype = None  # Keep as None or set to torch.float16 / torch.bfloat16
+dtype = torch.float16
 load_in_4bit = True  # We will use 4-bit quantization
 
 # Load model and tokenizer
@@ -86,8 +86,8 @@ training_args = TrainingArguments(
     gradient_accumulation_steps=4,
     num_train_epochs=3,
     learning_rate=5e-5,
-    fp16=not is_bfloat16_supported(),
-    bf16=is_bfloat16_supported(),
+    fp16=True,
+    bf16=False,
     logging_steps=50,
     optim="paged_adamw_8bit",  # Use an optimizer compatible with 8-bit models
     weight_decay=0.01,
