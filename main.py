@@ -5,7 +5,9 @@ from unsloth.chat_templates import standardize_sharegpt
 from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForSeq2Seq
 from unsloth import is_bfloat16_supported
+import multiprocessing
 
+num_cpus = multiprocessing.cpu_count()
 max_seq_length = 4096
 dtype = None  # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
 load_in_4bit = True  # Use 4bit quantization to reduce memory usage. Can be False.
@@ -76,7 +78,7 @@ def preprocess_function(examples):
 dataset = dataset.map(
     preprocess_function,
     batched=True,
-    num_proc=2,
+    num_proc=num_cpus,
     remove_columns=dataset.column_names,
 )
 
