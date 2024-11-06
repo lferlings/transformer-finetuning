@@ -1,5 +1,4 @@
 from unsloth import FastLanguageModel
-import torch
 from datasets import load_dataset
 from unsloth.chat_templates import standardize_sharegpt
 
@@ -57,7 +56,6 @@ trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
     train_dataset = dataset,
-    dataset_text_field = "text",
     max_seq_length = max_seq_length,
     data_collator = DataCollatorForSeq2Seq(tokenizer = tokenizer),
     dataset_num_proc = 2,
