@@ -6,6 +6,9 @@ from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForSeq2Seq
 from unsloth import is_bfloat16_supported
 
+from unsloth.chat_templates import get_chat_template
+
+
 max_seq_length = 4096 
 dtype = None # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
 load_in_4bit = True # Use 4bit quantization to reduce memory usage. Can be False.
@@ -33,8 +36,6 @@ model = FastLanguageModel.get_peft_model(
     loftq_config = None, # And LoftQ
 )
 
-from unsloth.chat_templates import get_chat_template
-
 tokenizer = get_chat_template(
     tokenizer,
     chat_template = "llama-3.1",
@@ -56,7 +57,6 @@ trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
     train_dataset = dataset,
-    max_seq_length = max_seq_length,
     data_collator = DataCollatorForSeq2Seq(tokenizer = tokenizer),
     dataset_num_proc = 2,
     packing = False, # Can make training 5x faster for short sequences.
@@ -80,5 +80,5 @@ trainer = SFTTrainer(
 
 trainer_stats = trainer.train()
 
-model.save_pretrained("/saved_data/models/iteration_1/lora_model") # Local saving
-tokenizer.save_pretrained("/saved_data/models/iteration_1/lora_model")
+model.save_pretrained("/home/jovyan/work/saved_data/transformer-finetuning/models/iteration_1/lora_model") # Local saving
+tokenizer.save_pretrained("/home/jovyan/work/saved_data/transformer-finetuning/models/iteration_1/lora_model")
