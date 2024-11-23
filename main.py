@@ -1,33 +1,42 @@
 import os
 import random
+import string
 import torch
 from torch.optim.adamw import AdamW
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, get_linear_schedule_with_warmup
+import argparse
 
-# set random seed for reproducibility
+# Set up argument parser
+parser = argparse.ArgumentParser(description="Train GPT-2 on a text dataset.")
+parser.add_argument('--model', type=str, required=True, help="Path to the pretrained model or model name (e.g., 'gpt2').")
+parser.add_argument('--batch_size', type=int, required=False, default=4, help="Batch size for training.")
+parser.add_argument('--epochs', type=int, required=True, help="Number of training epochs.")
+parser.add_argument('--output_dir', type=string, required=False,default='./results/', help="Number of training epochs.")
+
+# Parse arguments
+args = parser.parse_args()
+
+# Set random seed for reproducibility
 random.seed(42)
 torch.manual_seed(42)
 
-# load text file as dataset
+# Load text file as dataset
 with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
-# initialize GPT2 tokenizer and model
-tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-model = GPT2LMHeadModel.from_pretrained('gpt2')
+# Initialize GPT2 tokenizer and model
+tokenizer = GPT2Tokenizer.from_pretrained(args.model)
+model = GPT2LMHeadModel.from_pretrained(args.model)
 
-# set device to GPU if available
+# Set device to GPU if available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
-# tokenize text and convert to torch tensors
-#input_ids = tokenizer.encode(text, return_tensors='pt').to(device)
-
-
+# Tokenize text and convert to torch tensors
 lyrics_list = text.split('----------------------------------------\n')
 processed_strings = ["\n".join(item.split("\n")[1:]) for item in lyrics_list]
 
-# Tokenize each string in the processed_strings list
+# Ensure tokenizer has a pad token
 tokenizer.pad_token = tokenizer.eos_token
 encodings = tokenizer(
     processed_strings,
@@ -41,18 +50,17 @@ encodings = tokenizer(
 input_ids = encodings['input_ids'].to(device)
 attention_mask = encodings['attention_mask'].to(device)
 
-
-# set training parameters
-train_batch_size = 4
-num_train_epochs = 3
+# Set training parameters
+train_batch_size = args.batch_size
+num_train_epochs = args.epochs
 learning_rate = 5e-5
 
-# initialize optimizer and scheduler
+# Initialize optimizer and scheduler
 optimizer = AdamW(model.parameters(), lr=learning_rate)
 total_steps = len(input_ids) * num_train_epochs // train_batch_size
 scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
 
-# train the model
+# Train the model
 model.train()
 for epoch in range(num_train_epochs):
     epoch_loss = 0.0
@@ -76,13 +84,12 @@ for epoch in range(num_train_epochs):
         # Update parameters
         optimizer.step()
         scheduler.step()
-    print('Epoch: {}, Loss: {:.4f}'.format(epoch+1, epoch_loss / len(input_ids)))
+        
+        if not os.path.exists(args.output_dir):
+            os.makedirs(args.output_dir)
+        model.save_pretrained(args.output_dir)
+        tokenizer.save_pretrained(args.output_dir)
+    print('Epoch: {}, Loss: {:.4f}'.format(epoch + 1, epoch_loss / len(input_ids)))
 
+# Save the trained model
 
-# save the trained model
-output_dir = './results/'
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
-    
-model.save_pretrained(output_dir)
-tokenizer.save_pretrained(output_dir)
