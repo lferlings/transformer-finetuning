@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description="Train GPT-2 on a text dataset.")
 parser.add_argument('--model', type=str, required=True, help="Path to the pretrained model or model name (e.g., 'gpt2').")
 parser.add_argument('--batch_size', type=int, required=False, default=4, help="Batch size for training.")
 parser.add_argument('--epochs', type=int, required=True, help="Number of training epochs.")
-parser.add_argument('--output_dir', type=string, required=False,default='./results/', help="Number of training epochs.")
+parser.add_argument('--output_dir', type=str, required=False,default='./results/', help="Number of training epochs.")
 
 # Parse arguments
 args = parser.parse_args()
