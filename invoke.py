@@ -36,7 +36,7 @@ def generate_text(model_path, prompt, max_length=50):
 if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Generate text using a fine-tuned GPT-2 model.")
-    parser.add_argument('--model_path', type=str, required=True, help="Path to the fine-tuned model directory.")
+    parser.add_argument('--model', type=str, required=True, help="Path to the fine-tuned model directory.")
     parser.add_argument('--prompt', type=str, required=True, help="Input prompt for text generation.")
     parser.add_argument('--max_length', type=int, default=512, help="Maximum length of generated text.")
     args = parser.parse_args()
