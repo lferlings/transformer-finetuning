@@ -1,11 +1,11 @@
 import argparse
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 def generate_text(model_path, prompt, max_length=50):
     # Load the tokenizer and model from the specified directory
-    tokenizer = GPT2Tokenizer.from_pretrained(model_path)
-    model = GPT2LMHeadModel.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(model_path)
     model.eval()
     
     # Set device to GPU if available
@@ -42,6 +42,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Generate text
-    output_text = generate_text(args.model_path, args.prompt, args.max_length)
+    output_text = generate_text(args.model, args.prompt, args.max_length)
     print("Generated Text:\n")
     print(output_text)
