@@ -10,6 +10,9 @@ from transformers import (
 import argparse
 from bitsandbytes.optim import AdamW8bit
 from tqdm import tqdm  # Import tqdm for progress bar
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch
+from transformers import AutoConfig
+
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Train Llama on a text dataset.")
@@ -53,7 +56,20 @@ with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
 
 # Initialize tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(args.model)
-model = AutoModelForCausalLM.from_pretrained(args.model)
+# model = AutoModelForCausalLM.from_pretrained(args.model)
+
+config = AutoConfig.from_pretrained(args.model)
+
+with init_empty_weights():
+    model = AutoModelForCausalLM.from_config(config)
+
+model = load_checkpoint_and_dispatch(
+    model,
+    args.model,
+    device_map='auto',  # Automatically assigns layers to devices
+    offload_folder='offload',  # Folder to store offloaded weights
+    offload_state_dict=True
+)
 
 # Set device to GPU if available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -65,7 +81,7 @@ if tokenizer.pad_token is None:
 
 # Create a custom Dataset class
 class LyricsDataset(Dataset):
-    def __init__(self, texts, tokenizer, max_length=512):
+    def __init__(self, texts, tokenizer, max_length=256):
         self.tokenizer = tokenizer
         self.texts = texts
         self.max_length = max_length
