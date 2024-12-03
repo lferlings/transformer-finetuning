@@ -20,6 +20,12 @@ args = parser.parse_args()
 random.seed(42)
 torch.manual_seed(42)
 
+def print_gpu_memory(step_desc):
+    allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
+    reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
+    print(f"{step_desc} - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
+
+
 # Load text file as dataset
 with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
     text = f.read()
@@ -82,30 +88,35 @@ total_steps = len(train_loader) * num_train_epochs
 scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
 
 # Use mixed precision training if supported
-scaler = torch.cuda.amp.GradScaler()
+scaler = torch.amp.GradScaler()
 
 # Training loop
 model.train()
 for epoch in range(num_train_epochs):
     epoch_loss = 0.0
-    for batch in train_loader:
+    for batch_idx, batch in enumerate(train_loader):
         # Move batch to device
-        batch_input_ids = batch['input_ids'].to(device)
-        batch_attention_mask = batch['attention_mask'].to(device)
-        batch_labels = batch['labels'].to(device)
+        batch_input_ids = batch['input_ids'].to(device, non_blocking=True)
+        batch_attention_mask = batch['attention_mask'].to(device, non_blocking=True)
+        batch_labels = batch['labels'].to(device, non_blocking=True)
         
         # Clear gradients
         optimizer.zero_grad()
         
         # Forward pass with mixed precision
         with torch.cuda.amp.autocast():
-            outputs = model(input_ids=batch_input_ids, attention_mask=batch_attention_mask, labels=batch_labels)
+            outputs = model(
+                input_ids=batch_input_ids,
+                attention_mask=batch_attention_mask,
+                labels=batch_labels
+            )
             loss = outputs.loss
         
         # Backward pass
         scaler.scale(loss).backward()
         
-        # Clip gradients to prevent exploding gradients
+        # Clip gradients
+        scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
         # Update parameters
@@ -113,9 +124,17 @@ for epoch in range(num_train_epochs):
         scaler.update()
         scheduler.step()
         
+        # Accumulate loss
         epoch_loss += loss.item()
+        
+        # Delete variables to free up memory
+        del batch_input_ids, batch_attention_mask, batch_labels, outputs, loss
+        torch.cuda.empty_cache()
+        
+        if batch_idx % 10 == 0:
+            print_gpu_memory(f"After batch {batch_idx}")
     
-    # Print epoch loss
+    # Calculate average loss
     avg_epoch_loss = epoch_loss / len(train_loader)
     print(f'Epoch: {epoch + 1}, Loss: {avg_epoch_loss:.4f}')
     
