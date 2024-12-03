@@ -5,13 +5,15 @@ import torch
 from torch.optim.adamw import AdamW
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, get_linear_schedule_with_warmup
 import argparse
+# Load model directly
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # Set up argument parser
-parser = argparse.ArgumentParser(description="Train GPT-2 on a text dataset.")
+parser = argparse.ArgumentParser(description="Train Llama on a text dataset.")
 parser.add_argument('--model', type=str, required=True, help="Path to the pretrained model or model name (e.g., 'gpt2').")
 parser.add_argument('--batch_size', type=int, required=False, default=4, help="Batch size for training.")
 parser.add_argument('--epochs', type=int, required=True, help="Number of training epochs.")
-parser.add_argument('--output_dir', type=str, required=False,default='./results/', help="Number of training epochs.")
+parser.add_argument('--output_dir', type=str, required=False,default='./outputs/llama/', help="Path to save the model.")
 
 # Parse arguments
 args = parser.parse_args()
@@ -25,8 +27,11 @@ with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 # Initialize GPT2 tokenizer and model
-tokenizer = GPT2Tokenizer.from_pretrained(args.model)
-model = GPT2LMHeadModel.from_pretrained(args.model)
+# tokenizer = GPT2Tokenizer.from_pretrained(args.model)
+# model = GPT2LMHeadModel.from_pretrained(args.model)
+
+tokenizer = AutoTokenizer.from_pretrained(args.model)
+model = AutoModelForCausalLM.from_pretrained(args.model)
 
 # Set device to GPU if available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
