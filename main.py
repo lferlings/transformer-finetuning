@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.optim.adamw import AdamW
 from transformers import AutoTokenizer, AutoModelForCausalLM, get_linear_schedule_with_warmup
 import argparse
+from bitsandbytes.optim import AdamW8bit
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Train Llama on a text dataset.")
@@ -83,7 +84,8 @@ num_train_epochs = args.epochs
 learning_rate = 5e-5
 
 # Initialize optimizer and scheduler
-optimizer = AdamW(model.parameters(), lr=learning_rate)
+# optimizer = AdamW(model.parameters(), lr=learning_rate)
+optimizer = AdamW8bit(model.parameters(), lr=learning_rate)
 total_steps = len(train_loader) * num_train_epochs
 scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
 
