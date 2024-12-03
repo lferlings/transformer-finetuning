@@ -2,17 +2,38 @@ import os
 import random
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.adamw import AdamW
-from transformers import AutoTokenizer, AutoModelForCausalLM, get_linear_schedule_with_warmup
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    get_linear_schedule_with_warmup,
+)
 import argparse
 from bitsandbytes.optim import AdamW8bit
+from tqdm import tqdm  # Import tqdm for progress bar
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Train Llama on a text dataset.")
-parser.add_argument('--model', type=str, required=True, help="Path to the pretrained model or model name (e.g., 'meta-llama/Llama-3.2-1B').")
-parser.add_argument('--batch_size', type=int, default=4, help="Batch size for training.")
-parser.add_argument('--epochs', type=int, required=True, help="Number of training epochs.")
-parser.add_argument('--output_dir', type=str, default='./outputs/llama/', help="Path to save the model.")
+parser.add_argument(
+    '--model',
+    type=str,
+    required=True,
+    help="Path to the pretrained model or model name (e.g., 'meta-llama/Llama-3.2-1B').",
+)
+parser.add_argument(
+    '--batch_size', type=int, default=4, help="Batch size for training."
+)
+parser.add_argument(
+    '--epochs',
+    type=int,
+    required=True,
+    help="Number of training epochs.",
+)
+parser.add_argument(
+    '--output_dir',
+    type=str,
+    default='./outputs/llama/',
+    help="Path to save the model.",
+)
 
 # Parse arguments
 args = parser.parse_args()
@@ -25,7 +46,6 @@ def print_gpu_memory(step_desc):
     allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
     reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
     print(f"{step_desc} - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
-
 
 # Load text file as dataset
 with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
@@ -84,19 +104,26 @@ num_train_epochs = args.epochs
 learning_rate = 5e-5
 
 # Initialize optimizer and scheduler
-# optimizer = AdamW(model.parameters(), lr=learning_rate)
 optimizer = AdamW8bit(model.parameters(), lr=learning_rate)
 total_steps = len(train_loader) * num_train_epochs
-scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
+scheduler = get_linear_schedule_with_warmup(
+    optimizer, num_warmup_steps=0, num_training_steps=total_steps
+)
 
 # Use mixed precision training if supported
 scaler = torch.amp.GradScaler()
 
-# Training loop
+# Training loop with tqdm progress bar
 model.train()
 for epoch in range(num_train_epochs):
     epoch_loss = 0.0
-    for batch_idx, batch in enumerate(train_loader):
+    # Initialize the progress bar for batches
+    progress_bar = tqdm(
+        enumerate(train_loader),
+        total=len(train_loader),
+        desc=f"Epoch {epoch+1}/{num_train_epochs}",
+    )
+    for batch_idx, batch in progress_bar:
         # Move batch to device
         batch_input_ids = batch['input_ids'].to(device, non_blocking=True)
         batch_attention_mask = batch['attention_mask'].to(device, non_blocking=True)
@@ -106,7 +133,7 @@ for epoch in range(num_train_epochs):
         optimizer.zero_grad()
         
         # Forward pass with mixed precision
-        with torch.amp.autocast('cuda'):
+        with torch.amp.autocast(device_type=device.type):
             outputs = model(
                 input_ids=batch_input_ids,
                 attention_mask=batch_attention_mask,
@@ -129,16 +156,16 @@ for epoch in range(num_train_epochs):
         # Accumulate loss
         epoch_loss += loss.item()
         
+        # Update progress bar
+        progress_bar.set_postfix({'loss': loss.item()})
+        
         # Delete variables to free up memory
         del batch_input_ids, batch_attention_mask, batch_labels, outputs, loss
         torch.cuda.empty_cache()
-        
-        if batch_idx % 10 == 0:
-            print_gpu_memory(f"After batch {batch_idx}")
     
     # Calculate average loss
     avg_epoch_loss = epoch_loss / len(train_loader)
-    print(f'Epoch: {epoch + 1}, Loss: {avg_epoch_loss:.4f}')
+    print(f'Epoch: {epoch + 1}, Average Loss: {avg_epoch_loss:.4f}')
     
     # Save the model at the end of each epoch
     if not os.path.exists(args.output_dir):
