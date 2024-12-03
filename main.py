@@ -125,8 +125,8 @@ model, optimizer, train_loader, scheduler = accelerator.prepare(
     model, optimizer, train_loader, scheduler
 )
 
-# Initialize scaler for mixed precision
-scaler = torch.cuda.amp.GradScaler()
+# Remove GradScaler initialization
+# scaler = torch.cuda.amp.GradScaler()
 
 # Training loop with tqdm progress bar
 model.train()
@@ -156,16 +156,14 @@ for epoch in range(num_train_epochs):
             )
             loss = outputs.loss
         
-        # Backward pass
-        scaler.scale(loss).backward()
+        # Backward pass using Accelerator
+        accelerator.backward(loss)
         
         # Clip gradients
-        scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
         # Update parameters
-        scaler.step(optimizer)
-        scaler.update()
+        optimizer.step()
         scheduler.step()
         
         # Accumulate loss
