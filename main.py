@@ -3,16 +3,15 @@ import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import (
+    AutoConfig,
     AutoTokenizer,
     AutoModelForCausalLM,
     get_linear_schedule_with_warmup,
 )
 import argparse
+from tqdm import tqdm
 from bitsandbytes.optim import AdamW8bit
-from tqdm import tqdm  # Import tqdm for progress bar
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
-from transformers import AutoConfig
-
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Train Llama on a text dataset.")
@@ -20,10 +19,10 @@ parser.add_argument(
     '--model',
     type=str,
     required=True,
-    help="Path to the pretrained model or model name (e.g., 'meta-llama/Llama-3.2-1B').",
+    help="Path to the pretrained model or model name (e.g., 'meta-llama/Llama-3.2-3B').",
 )
 parser.add_argument(
-    '--batch_size', type=int, default=4, help="Batch size for training."
+    '--batch_size', type=int, default=1, help="Batch size for training."
 )
 parser.add_argument(
     '--epochs',
@@ -45,35 +44,11 @@ args = parser.parse_args()
 random.seed(42)
 torch.manual_seed(42)
 
-def print_gpu_memory(step_desc):
-    allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
-    reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
-    print(f"{step_desc} - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
-
-# Load text file as dataset
-with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
-    text = f.read()
-
-# Initialize tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained(args.model)
-# model = AutoModelForCausalLM.from_pretrained(args.model)
-
-config = AutoConfig.from_pretrained(args.model)
-
-with init_empty_weights():
-    model = AutoModelForCausalLM.from_config(config)
-
-model = load_checkpoint_and_dispatch(
-    model,
-    args.model,
-    device_map='auto',  # Automatically assigns layers to devices
-    offload_folder='offload',  # Folder to store offloaded weights
-    offload_state_dict=True
-)
-
 # Set device to GPU if available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
+
+# Initialize tokenizer
+tokenizer = AutoTokenizer.from_pretrained(args.model)
 
 # Ensure tokenizer has a pad token
 if tokenizer.pad_token is None:
@@ -81,7 +56,7 @@ if tokenizer.pad_token is None:
 
 # Create a custom Dataset class
 class LyricsDataset(Dataset):
-    def __init__(self, texts, tokenizer, max_length=256):
+    def __init__(self, texts, tokenizer, max_length=256):  # Reduced max_length
         self.tokenizer = tokenizer
         self.texts = texts
         self.max_length = max_length
@@ -108,6 +83,10 @@ class LyricsDataset(Dataset):
             'labels': labels
         }
 
+# Load text file as dataset
+with open('./scraper/songs.txt', 'r', encoding='utf-8') as f:
+    text = f.read()
+
 # Prepare the dataset and dataloader
 lyrics_list = text.split('----------------------------------------\n')
 processed_strings = ["\n".join(item.split("\n")[1:]) for item in lyrics_list]
@@ -119,6 +98,34 @@ train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 num_train_epochs = args.epochs
 learning_rate = 5e-5
 
+# Load model configuration
+config = AutoConfig.from_pretrained(args.model)
+
+# Initialize model with empty weights
+with init_empty_weights():
+    model = AutoModelForCausalLM.from_config(config)
+
+# Define device map
+device_map = {
+    'transformer.wte': 0,
+    'transformer.h': 0,
+    'transformer.ln_f': 0,
+    'lm_head': 0,
+}
+
+# Load model weights with Accelerate
+model = load_checkpoint_and_dispatch(
+    model,
+    checkpoint=args.model,
+    device_map='auto',         # Automatically map layers to devices
+    no_split_module_classes=["LlamaDecoderLayer"],  # For Llama models
+    offload_folder='offload',  # Folder to offload weights to
+    dtype=torch.float16,       # Use float16 precision
+)
+
+# Enable gradient checkpointing
+model.gradient_checkpointing_enable()
+
 # Initialize optimizer and scheduler
 optimizer = AdamW8bit(model.parameters(), lr=learning_rate)
 total_steps = len(train_loader) * num_train_epochs
@@ -127,13 +134,12 @@ scheduler = get_linear_schedule_with_warmup(
 )
 
 # Use mixed precision training if supported
-scaler = torch.amp.GradScaler()
+scaler = torch.cuda.amp.GradScaler()
 
 # Training loop with tqdm progress bar
 model.train()
 for epoch in range(num_train_epochs):
     epoch_loss = 0.0
-    # Initialize the progress bar for batches
     progress_bar = tqdm(
         enumerate(train_loader),
         total=len(train_loader),
@@ -149,7 +155,7 @@ for epoch in range(num_train_epochs):
         optimizer.zero_grad()
         
         # Forward pass with mixed precision
-        with torch.amp.autocast(device_type=device.type):
+        with torch.cuda.amp.autocast():
             outputs = model(
                 input_ids=batch_input_ids,
                 attention_mask=batch_attention_mask,
