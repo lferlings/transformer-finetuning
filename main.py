@@ -104,7 +104,7 @@ for epoch in range(num_train_epochs):
         optimizer.zero_grad()
         
         # Forward pass with mixed precision
-        with torch.amp.autocast():
+        with torch.amp.autocast('cuda'):
             outputs = model(
                 input_ids=batch_input_ids,
                 attention_mask=batch_attention_mask,
