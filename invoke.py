@@ -9,7 +9,7 @@ def generate_text(model_path, prompt, max_length=50):
     model.eval()
     
     # Set device to GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:"+args.gpu if torch.cuda.is_available() else "cpu")
     model.to(device)
     
     # Tokenize the input prompt
@@ -39,6 +39,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, required=True, help="Path to the fine-tuned model directory.")
     parser.add_argument('--prompt', type=str, required=True, help="Input prompt for text generation.")
     parser.add_argument('--max_length', type=int, default=512, help="Maximum length of generated text.")
+    parser.add_argument('--gpu', type=int, default=0, help="cuda:x to use as device.")
     args = parser.parse_args()
     
     # Generate text
