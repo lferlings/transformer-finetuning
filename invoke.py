@@ -9,7 +9,7 @@ def generate_text(model_path, prompt, max_length=50):
     model.eval()
     
     # Set device to GPU if available
-    device = torch.device("cuda:"+args.gpu if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:"+int(args.gpu) if torch.cuda.is_available() else "cpu")
     model.to(device)
     
     # Tokenize the input prompt
