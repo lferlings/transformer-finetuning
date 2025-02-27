@@ -22,10 +22,10 @@ def generate_text(model_path, prompt, max_length=50):
             max_length=max_length,
             num_return_sequences=1,
             no_repeat_ngram_size=2,
-            do_sample=False,       
-            top_k=0,               
-            top_p=1.0,             
-            temperature=1.0,       
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
+            temperature=1.0,     
             pad_token_id=tokenizer.eos_token_id
         )
     
